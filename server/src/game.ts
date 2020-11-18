@@ -251,8 +251,6 @@ export function createGame() {
   games.set(roomCode, newGame);
 }
 
-console.log(JSON.stringify(createGameMachine("123").config));
-
 // export function handleEvent(action: Action) {
 //   const game = games.get(action.code);
 //   if (!game) throw Error(`Could not find game ${action.code}`);
