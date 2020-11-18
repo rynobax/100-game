@@ -19,7 +19,16 @@ interface StartClient {}
 
 interface StartServer {}
 
-export type GameStateUpdate = { players: string[]; hand: number[] };
+export type PlayerAction = "play_card" | "end_turn";
+
+export type Pile = "A" | "B" | "C" | "D";
+
+export type GameStateUpdate = {
+  actions: PlayerAction[];
+  hand: number[];
+  piles: Record<Pile, number[]>;
+  players: string[];
+};
 
 interface UpdateServer {
   state: GameStateUpdate;

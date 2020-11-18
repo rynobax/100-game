@@ -7,7 +7,7 @@ import {
   interpret,
   State,
 } from "xstate";
-import type { GameStateUpdate } from "../../shared/types";
+import type { GameStateUpdate, PlayerAction } from "../../shared/types";
 
 const MAX_HAND_SIZE = 6;
 const MIN_ALLOWED_PLAYERS = 2;
@@ -65,6 +65,7 @@ type GameContext = {
 type GameMachine = StateMachine<GameContext, GameSchema, GameEvent>;
 
 export type Game = {
+  getCurrentView: (name: string) => GameStateUpdate;
   onTransition: (fn: (view: GameStateUpdate) => void, name: string) => void;
   transition: (event: GameEvent) => void;
 };
@@ -248,6 +249,7 @@ export function createGame() {
   // TODO: stop machine sometime
 
   const newGame: Game = {
+    getCurrentView: (name) => generateGameStateUpdate(service.state, name),
     onTransition: (fn, name) => {
       service.onTransition((state) => {
         console.log(state.value, state.context);
@@ -274,11 +276,28 @@ function generateGameStateUpdate(
   state: State<GameContext, GameEvent, GameSchema>,
   name: string
 ): GameStateUpdate | null {
-  const player = state.context.players.find((p) => p.name === name);
+  const { activePlayer, piles, players } = state.context;
+  const currentState = state.value as keyof GameSchema["states"];
+
+  const playerIndex = players.findIndex((p) => p.name === name);
+  const player = players[playerIndex];
 
   if (!player) return null;
+
+  const isTurn = activePlayer === playerIndex;
+
+  const actions: PlayerAction[] = [];
+  if (isTurn) {
+    actions.push("play_card");
+    if (currentState === "play_optional") {
+      actions.push("end_turn");
+    }
+  }
+
   return {
-    players: state.context.players.map((p) => p.name),
+    actions,
     hand: player.hand,
+    piles,
+    players: players.map((p) => p.name),
   };
 }

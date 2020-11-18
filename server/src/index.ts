@@ -28,6 +28,7 @@ io.on("connection", (socket: Socket) => {
       console.log(view);
       if (view) socket.emit("update", { state: view });
     }, name);
+    socket.emit("update", { state: game.getCurrentView(name) });
   }
 
   socket.on("host", (msg: Messages["host"]["client"], cb) => {
@@ -37,8 +38,8 @@ io.on("connection", (socket: Socket) => {
     gameCode = code;
     name = msg.name;
     game = getGame(code);
-    initializeServerToClient();
     game.transition({ type: "PLAYER_JOIN", name });
+    initializeServerToClient();
   });
 
   // TODO: joining will not always work, need to handle failure
@@ -49,8 +50,8 @@ io.on("connection", (socket: Socket) => {
     gameCode = msg.code;
     name = msg.name;
     game = getGame(msg.code);
-    initializeServerToClient();
     game.transition({ type: "PLAYER_JOIN", name });
+    initializeServerToClient();
   });
 
   socket.on("start", (msg: Messages["start"]["client"], cb) => {
