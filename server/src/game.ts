@@ -47,7 +47,8 @@ interface GameSchema {
     lobby_ready: {};
     lobby_full: {};
     playing: PlayingSchema;
-    finished: {};
+    finished_loss: {};
+    finished_win: {};
   };
 }
 
@@ -55,6 +56,7 @@ interface Player {
   id: string;
   name: string;
   hand: number[];
+  drawnInitialHand: boolean;
 }
 
 type GameContext = {
@@ -87,10 +89,6 @@ function createRoomCode() {
 }
 
 const createGameMachine = (id: string): GameMachine => {
-  const initializeGame = assign<GameContext>({
-    // players: (c) => c.players.map(p => ({ ...p, hand: }))
-  });
-
   const incCardsPlayed = assign<GameContext>({
     cardsPlayed: (c) => c.cardsPlayed + 1,
   });
@@ -113,7 +111,11 @@ const createGameMachine = (id: string): GameMachine => {
       drawPile: newDrawPile,
       players: c.players.map((p, i) => {
         if (i !== c.activePlayer) return p;
-        return { ...p, hand: [...p.hand, ...drawnCards] };
+        return {
+          ...p,
+          hand: [...p.hand, ...drawnCards],
+          drawnInitialHand: true,
+        };
       }),
     };
   });
@@ -131,7 +133,10 @@ const createGameMachine = (id: string): GameMachine => {
       entry: [drawCards, incPlayer],
       on: {
         "": [
-          // TODO: Checks for win / loss
+          {
+            target: "next_player",
+            cond: (ctx) => !ctx.players.every((p) => p.drawnInitialHand),
+          },
           {
             target: "play_required",
           },
@@ -141,6 +146,16 @@ const createGameMachine = (id: string): GameMachine => {
     card_played: {
       on: {
         "": [
+          {
+            target: "finished_win",
+            cond: (ctx) => {
+              const playerCards = ctx.players.reduce(
+                (p, c) => p + c.hand.length,
+                0
+              );
+              return ctx.drawPile.length + playerCards === 0;
+            },
+          },
           {
             target: "play_optional",
             cond: (ctx) => {
@@ -204,11 +219,13 @@ const createGameMachine = (id: string): GameMachine => {
       on: {
         END_GAME: "finished",
       },
-      initial: "play_required",
+      initial: "next_player",
       states: playingStates,
-      entry: initializeGame,
     },
-    finished: {
+    finished_loss: {
+      type: "final",
+    },
+    finished_win: {
       type: "final",
     },
   };
