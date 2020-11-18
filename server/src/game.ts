@@ -7,6 +7,8 @@ import {
 } from "xstate";
 
 const MAX_HAND_SIZE = 6;
+const MIN_ALLOWED_PLAYERS = 2;
+const MAX_ALLOWED_PLAYERS = 10;
 
 type BaseEvent<K, T = {}> = T & { type: K; code: RoomCode; playerId: string };
 
@@ -18,14 +20,21 @@ type EventEndTurn = BaseEvent<"END_TURN">;
 type EventStartGame = BaseEvent<"START_GAME">;
 type EventEndGame = BaseEvent<"END_GAME">;
 
-type GameEvent = EventStartGame | EventEndGame | EventPlayCard | EventEndTurn;
+type EventPlayerJoin = BaseEvent<"PLAYER_JOIN", { player: Player }>;
+
+type GameEvent =
+  | EventStartGame
+  | EventEndGame
+  | EventPlayCard
+  | EventEndTurn
+  | EventPlayerJoin;
 
 type RoomCode = string;
-type ClientState = {};
 
 interface PlayingSchema {
   states: {
     next_player: {};
+    card_played: {};
     play_required: {};
     play_optional: {};
   };
@@ -33,7 +42,10 @@ interface PlayingSchema {
 
 interface GameSchema {
   states: {
-    lobby: {};
+    player_joined: {};
+    lobby_not_ready: {};
+    lobby_ready: {};
+    lobby_full: {};
     playing: PlayingSchema;
     finished: {};
   };
@@ -110,6 +122,10 @@ const createGameMachine = (id: string): GameMachine => {
     activePlayer: (c) => (c.activePlayer + 1) % c.players.length,
   });
 
+  const addPlayer = assign<GameContext, EventPlayerJoin>({
+    players: (c, e) => [...c.players, e.player],
+  });
+
   const playingStates: StatesConfig<GameContext, PlayingSchema, GameEvent> = {
     next_player: {
       entry: [drawCards, incPlayer],
@@ -122,35 +138,66 @@ const createGameMachine = (id: string): GameMachine => {
         ],
       },
     },
-    play_required: {
+    card_played: {
       on: {
-        PLAY_CARD: [
+        "": [
           {
             target: "play_optional",
             cond: (ctx) => {
               const requiredCardsPlayed = ctx.drawPile.length > 0 ? 2 : 1;
               return ctx.cardsPlayed >= requiredCardsPlayed;
             },
-            actions: [incCardsPlayed, playCard],
           },
+          { target: "play_required" },
         ],
+      },
+      entry: [incCardsPlayed, playCard],
+    },
+    play_required: {
+      on: {
+        PLAY_CARD: "card_played",
       },
     },
     play_optional: {
       on: {
-        PLAY_CARD: {
-          target: "play_optional",
-          actions: [incCardsPlayed, playCard],
-        },
-        END_TURN: { target: "next_player" },
+        PLAY_CARD: "card_played",
+        END_TURN: "next_player",
       },
     },
   };
 
   const rootStates: StatesConfig<GameContext, GameSchema, GameEvent> = {
-    lobby: {
+    player_joined: {
       on: {
-        START_GAME: { target: "playing", actions: initializeGame },
+        "": [
+          {
+            target: "lobby_full",
+            cond: (ctx) => ctx.players.length >= MAX_ALLOWED_PLAYERS,
+          },
+          {
+            target: "lobby_ready",
+            cond: (ctx) => ctx.players.length >= MIN_ALLOWED_PLAYERS,
+          },
+          {
+            target: "lobby_not_ready",
+          },
+        ],
+      },
+      entry: addPlayer,
+    },
+    lobby_not_ready: {
+      on: {
+        PLAYER_JOIN: "player_joined",
+      },
+    },
+    lobby_ready: {
+      on: {
+        PLAYER_JOIN: "player_joined",
+      },
+    },
+    lobby_full: {
+      on: {
+        START_GAME: "playing",
       },
     },
     playing: {
@@ -159,6 +206,7 @@ const createGameMachine = (id: string): GameMachine => {
       },
       initial: "play_required",
       states: playingStates,
+      entry: initializeGame,
     },
     finished: {
       type: "final",
@@ -173,7 +221,7 @@ const createGameMachine = (id: string): GameMachine => {
       players: [],
     },
     id,
-    initial: "lobby",
+    initial: "lobby_not_ready",
     states: rootStates,
   };
 
