@@ -1,4 +1,4 @@
-import { Server } from "socket.io";
+import { Server, Socket } from "socket.io";
 require("dotenv").config();
 
 import type { Messages } from "../../shared/types";
@@ -17,11 +17,18 @@ io.listen(PORT, {
   },
 });
 
-io.on("connection", (socket) => {
+io.on("connection", (socket: Socket) => {
   console.log("new connection");
   let gameCode: string;
   let game: Game;
   let name: string;
+
+  function initializeServerToClient() {
+    game.onTransition((view) => {
+      console.log(view);
+      if (view) socket.emit("update", { state: view });
+    }, name);
+  }
 
   socket.on("host", (msg: Messages["host"]["client"], cb) => {
     const code = createGame();
@@ -30,8 +37,11 @@ io.on("connection", (socket) => {
     gameCode = code;
     name = msg.name;
     game = getGame(code);
+    initializeServerToClient();
+    game.transition({ type: "PLAYER_JOIN", name });
   });
 
+  // TODO: joining will not always work, need to handle failure
   socket.on("join", (msg: Messages["join"]["client"], cb) => {
     console.log(msg.code);
     const res: Messages["join"]["server"] = { success: true };
@@ -39,6 +49,8 @@ io.on("connection", (socket) => {
     gameCode = msg.code;
     name = msg.name;
     game = getGame(msg.code);
+    initializeServerToClient();
+    game.transition({ type: "PLAYER_JOIN", name });
   });
 
   socket.on("start", (msg: Messages["start"]["client"], cb) => {

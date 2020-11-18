@@ -1,4 +1,5 @@
-export type { Messages } from "../../shared/types";
+import type { GameStateUpdate } from "../../shared/types";
+export type { Messages, GameStateUpdate } from "../../shared/types";
 
 export type Page = "home" | "lobby" | "game";
 export type RoleInfo =
@@ -10,4 +11,6 @@ export type PageProps = {
   setPage: (page: Page) => void;
   roleInfo: RoleInfo;
   setRoleInfo: (roleInfo: RoleInfo) => void;
+  gameState: GameStateUpdate | null;
+  setGameState: (gameState: GameStateUpdate) => void;
 };

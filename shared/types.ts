@@ -1,26 +1,33 @@
-interface JoinMessage {
+interface JoinClient {
   code: string;
   name: string;
 }
 
-interface JoinResponse {
+interface JoinServer {
   success: boolean;
 }
 
-interface HostMessage {
+interface HostClient {
   name: string;
 }
 
-interface HostResponse {
+interface HostServer {
   code: string;
 }
 
-interface StartMessage {}
+interface StartClient {}
 
-interface StartResponse {}
+interface StartServer {}
+
+export type GameStateUpdate = { players: string[]; hand: number[] };
+
+interface UpdateServer {
+  state: GameStateUpdate;
+}
 
 export type Messages = {
-  join: { client: JoinMessage; server: JoinResponse };
-  host: { client: HostMessage; server: HostResponse };
-  start: { client: StartMessage; server: StartResponse };
+  join: { client: JoinClient; server: JoinServer };
+  host: { client: HostClient; server: HostServer };
+  start: { client: StartClient; server: StartServer };
+  update: { client: never; server: UpdateServer };
 };

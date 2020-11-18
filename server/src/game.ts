@@ -5,7 +5,9 @@ import {
   StatesConfig,
   assign,
   interpret,
+  State,
 } from "xstate";
+import type { GameStateUpdate } from "../../shared/types";
 
 const MAX_HAND_SIZE = 6;
 const MIN_ALLOWED_PLAYERS = 2;
@@ -21,7 +23,7 @@ type EventEndTurn = BaseEvent<"END_TURN">;
 type EventStartGame = BaseEvent<"START_GAME">;
 type EventEndGame = BaseEvent<"END_GAME">;
 
-type EventPlayerJoin = BaseEvent<"PLAYER_JOIN", { player: Player }>;
+type EventPlayerJoin = BaseEvent<"PLAYER_JOIN">;
 
 type GameEvent =
   | EventStartGame
@@ -32,24 +34,18 @@ type GameEvent =
 
 type RoomCode = string;
 
-interface PlayingSchema {
-  states: {
-    next_player: {};
-    card_played: {};
-    play_required: {};
-    play_optional: {};
-  };
-}
-
 interface GameSchema {
   states: {
     player_joined: {};
     lobby_not_ready: {};
     lobby_ready: {};
     lobby_full: {};
-    playing: PlayingSchema;
     finished_loss: {};
     finished_win: {};
+    next_player: {};
+    card_played: {};
+    play_required: {};
+    play_optional: {};
   };
 }
 
@@ -69,7 +65,7 @@ type GameContext = {
 type GameMachine = StateMachine<GameContext, GameSchema, GameEvent>;
 
 export type Game = {
-  machine: GameMachine;
+  onTransition: (fn: (view: GameStateUpdate) => void, name: string) => void;
   transition: (event: GameEvent) => void;
 };
 
@@ -128,10 +124,55 @@ const createGameMachine = (id: string): GameMachine => {
   });
 
   const addPlayer = assign<GameContext, EventPlayerJoin>({
-    players: (c, e) => [...c.players, e.player],
+    players: (c, e) => [
+      ...c.players,
+      { drawnInitialHand: false, hand: [], name: e.name },
+    ],
   });
 
-  const playingStates: StatesConfig<GameContext, PlayingSchema, GameEvent> = {
+  const rootStates: StatesConfig<GameContext, GameSchema, GameEvent> = {
+    player_joined: {
+      on: {
+        "": [
+          {
+            target: "lobby_full",
+            cond: (ctx) => ctx.players.length >= MAX_ALLOWED_PLAYERS,
+          },
+          {
+            target: "lobby_ready",
+            cond: (ctx) => ctx.players.length >= MIN_ALLOWED_PLAYERS,
+          },
+          {
+            target: "lobby_not_ready",
+          },
+        ],
+      },
+      entry: addPlayer,
+    },
+    lobby_not_ready: {
+      on: {
+        PLAYER_JOIN: "player_joined",
+      },
+    },
+    lobby_ready: {
+      on: {
+        PLAYER_JOIN: "player_joined",
+        START_GAME: "next_player",
+      },
+    },
+    lobby_full: {
+      on: {
+        START_GAME: "next_player",
+      },
+    },
+    finished_loss: {
+      type: "final",
+    },
+    finished_win: {
+      type: "final",
+    },
+
+    // During the game
     next_player: {
       entry: [drawCards, incPlayer],
       on: {
@@ -183,55 +224,6 @@ const createGameMachine = (id: string): GameMachine => {
       },
     },
   };
-
-  const rootStates: StatesConfig<GameContext, GameSchema, GameEvent> = {
-    player_joined: {
-      on: {
-        "": [
-          {
-            target: "lobby_full",
-            cond: (ctx) => ctx.players.length >= MAX_ALLOWED_PLAYERS,
-          },
-          {
-            target: "lobby_ready",
-            cond: (ctx) => ctx.players.length >= MIN_ALLOWED_PLAYERS,
-          },
-          {
-            target: "lobby_not_ready",
-          },
-        ],
-      },
-      entry: addPlayer,
-    },
-    lobby_not_ready: {
-      on: {
-        PLAYER_JOIN: "player_joined",
-      },
-    },
-    lobby_ready: {
-      on: {
-        PLAYER_JOIN: "player_joined",
-      },
-    },
-    lobby_full: {
-      on: {
-        START_GAME: "playing",
-      },
-    },
-    playing: {
-      on: {
-        END_GAME: "finished",
-      },
-      initial: "next_player",
-      states: playingStates,
-    },
-    finished_loss: {
-      type: "final",
-    },
-    finished_win: {
-      type: "final",
-    },
-  };
   const config: MachineConfig<GameContext, GameSchema, GameEvent> = {
     context: {
       activePlayer: 0,
@@ -253,11 +245,15 @@ export function createGame() {
   const machine = createGameMachine(roomCode);
   const service = interpret(machine);
   service.start();
-  // TODO: Broadcast on transition?
-  // TODO: stop machine
+  // TODO: stop machine sometime
 
   const newGame: Game = {
-    machine,
+    onTransition: (fn, name) => {
+      service.onTransition((state) => {
+        console.log(state.value, state.context);
+        fn(generateGameStateUpdate(state, name));
+      });
+    },
     transition: (event) => {
       service.send(event);
     },
@@ -272,13 +268,17 @@ export function getGame(code: string) {
   return game;
 }
 
-// export function handleEvent(action: Action) {
-//   const game = games.get(action.code);
-//   if (!game) throw Error(`Could not find game ${action.code}`);
-//   game.state = reducer(game.state, action);
-//   return createClientView(game.state);
-// }
+// TODO: Doing this for every client, might be better to only compute once
+// TODO: Might be best to only send diffs
+function generateGameStateUpdate(
+  state: State<GameContext, GameEvent, GameSchema>,
+  name: string
+): GameStateUpdate | null {
+  const player = state.context.players.find((p) => p.name === name);
 
-// function createClientView(state: Machine): ClientState {
-//   return { players: state.players };
-// }
+  if (!player) return null;
+  return {
+    players: state.context.players.map((p) => p.name),
+    hand: player.hand,
+  };
+}

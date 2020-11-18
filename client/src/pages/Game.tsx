@@ -1,9 +1,16 @@
-import React from 'react';
+import React from "react";
+import { PageProps } from "types";
 
-interface GameProps {};
+type GameProps = PageProps;
 
-const Game: React.FC<GameProps> = props => {
-  return <div>game</div>;
-}
+const Game: React.FC<GameProps> = ({ gameState }) => {
+  if (!gameState) throw Error("Missing game state");
+
+  return (
+    <div>
+      {JSON.stringify(gameState)}
+    </div>
+  );
+};
 
 export default Game;
