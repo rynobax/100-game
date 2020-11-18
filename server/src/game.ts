@@ -143,21 +143,20 @@ const createGameMachine = (id: string): GameMachine => {
 
   const rootStates: StatesConfig<GameContext, GameSchema, GameEvent> = {
     player_joined: {
-      on: {
-        "": [
-          {
-            target: "lobby_full",
-            cond: (ctx) => ctx.players.length >= MAX_ALLOWED_PLAYERS,
-          },
-          {
-            target: "lobby_ready",
-            cond: (ctx) => ctx.players.length >= MIN_ALLOWED_PLAYERS,
-          },
-          {
-            target: "lobby_not_ready",
-          },
-        ],
-      },
+      always: [
+        {
+          target: "lobby_full",
+          cond: (ctx) => ctx.players.length >= MAX_ALLOWED_PLAYERS,
+        },
+        {
+          target: "lobby_ready",
+          cond: (ctx) => ctx.players.length >= MIN_ALLOWED_PLAYERS,
+        },
+        {
+          target: "lobby_not_ready",
+        },
+      ],
+
       entry: addPlayer,
     },
     lobby_not_ready: {
@@ -186,41 +185,37 @@ const createGameMachine = (id: string): GameMachine => {
     // During the game
     next_player: {
       entry: [drawCards, incPlayer],
-      on: {
-        "": [
-          {
-            target: "next_player",
-            cond: (ctx) => !ctx.players.every((p) => p.drawnInitialHand),
-          },
-          {
-            target: "play_required",
-          },
-        ],
-      },
+      always: [
+        {
+          target: "next_player",
+          cond: (ctx) => !ctx.players.every((p) => p.drawnInitialHand),
+        },
+        {
+          target: "play_required",
+        },
+      ],
     },
     card_played: {
-      on: {
-        "": [
-          {
-            target: "finished_win",
-            cond: (ctx) => {
-              const playerCards = ctx.players.reduce(
-                (p, c) => p + c.hand.length,
-                0
-              );
-              return ctx.drawPile.length + playerCards === 0;
-            },
+      always: [
+        {
+          target: "finished_win",
+          cond: (ctx) => {
+            const playerCards = ctx.players.reduce(
+              (p, c) => p + c.hand.length,
+              0
+            );
+            return ctx.drawPile.length + playerCards === 0;
           },
-          {
-            target: "play_optional",
-            cond: (ctx) => {
-              const requiredCardsPlayed = ctx.drawPile.length > 0 ? 2 : 1;
-              return ctx.cardsPlayed >= requiredCardsPlayed;
-            },
+        },
+        {
+          target: "play_optional",
+          cond: (ctx) => {
+            const requiredCardsPlayed = ctx.drawPile.length > 0 ? 2 : 1;
+            return ctx.cardsPlayed >= requiredCardsPlayed;
           },
-          { target: "play_required" },
-        ],
-      },
+        },
+        { target: "play_required" },
+      ],
       entry: [incCardsPlayed, playCard],
     },
     play_required: {
