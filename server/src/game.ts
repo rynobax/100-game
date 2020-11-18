@@ -4,13 +4,14 @@ import {
   StateMachine,
   StatesConfig,
   assign,
+  interpret,
 } from "xstate";
 
 const MAX_HAND_SIZE = 6;
 const MIN_ALLOWED_PLAYERS = 2;
 const MAX_ALLOWED_PLAYERS = 10;
 
-type BaseEvent<K, T = {}> = T & { type: K; code: RoomCode; playerId: string };
+type BaseEvent<K, T = {}> = T & { type: K; name: string };
 
 type Pile = "A" | "B" | "C" | "D";
 
@@ -53,7 +54,6 @@ interface GameSchema {
 }
 
 interface Player {
-  id: string;
   name: string;
   hand: number[];
   drawnInitialHand: boolean;
@@ -68,7 +68,10 @@ type GameContext = {
 };
 type GameMachine = StateMachine<GameContext, GameSchema, GameEvent>;
 
-type Game = { machine: GameMachine };
+export type Game = {
+  machine: GameMachine;
+  transition: (event: GameEvent) => void;
+};
 
 const games = new Map<RoomCode, Game>();
 
@@ -97,7 +100,7 @@ const createGameMachine = (id: string): GameMachine => {
     piles: (c, e) => ({ ...c.piles, [e.pile]: [...c.piles[e.pile], e.card] }),
     players: (c, e) =>
       c.players.map((p) => {
-        if (p.id !== e.playerId) return p;
+        if (p.name !== e.name) return p;
         return { ...p, hand: p.hand.filter((c) => c !== e.card) };
       }),
   });
@@ -247,8 +250,26 @@ const createGameMachine = (id: string): GameMachine => {
 
 export function createGame() {
   const roomCode = createRoomCode();
-  const newGame: Game = { machine: createGameMachine(roomCode) };
+  const machine = createGameMachine(roomCode);
+  const service = interpret(machine);
+  service.start();
+  // TODO: Broadcast on transition?
+  // TODO: stop machine
+
+  const newGame: Game = {
+    machine,
+    transition: (event) => {
+      service.send(event);
+    },
+  };
   games.set(roomCode, newGame);
+  return roomCode;
+}
+
+export function getGame(code: string) {
+  const game = games.get(code);
+  if (!game) throw Error(`Could not get game ${code}`);
+  return game;
 }
 
 // export function handleEvent(action: Action) {

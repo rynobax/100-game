@@ -1,24 +1,26 @@
 import React, { useState } from "react";
-import { Page, PageProps } from "types";
+import { Page, PageProps, RoleInfo } from "types";
 
 import Home from "pages/Home";
-import Host from "pages/Host";
-import Join from "pages/Join";
+import Lobby from "pages/Lobby";
+import Game from "pages/Game";
 
 function renderPage(page: Page, pageProps: PageProps) {
   switch (page) {
     case "home":
       return <Home {...pageProps} />;
-    case "host":
-      return <Host {...pageProps} />;
-    case "join":
-      return <Join {...pageProps} />;
+    case "lobby":
+      return <Lobby {...pageProps} />;
+    case "game":
+      return <Game {...pageProps} />;
   }
 }
 
 function App() {
   const [page, setPage] = useState<Page>("home");
-  const pageProps: PageProps = { setPage };
+  const [roleInfo, setRoleInfo] = useState<RoleInfo>({ role: "unknown" });
+
+  const pageProps: PageProps = { setPage, roleInfo, setRoleInfo };
 
   return (
     <div className="container max-w-screen-lg mx-auto">
