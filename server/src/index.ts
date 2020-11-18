@@ -1,20 +1,28 @@
-import express from "express";
-import http from "http";
 import { Server } from "socket.io";
+require("dotenv").config();
 
+import type { Messages } from "../../shared/types";
 import { createGame } from "./game";
 createGame();
 
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, { path: "ws", serveClient: false });
+const io = new Server({
+  path: "/ws",
+  serveClient: false,
+});
 
-io.attach(server);
+const PORT = 4000;
+io.listen(PORT, {
+  cors: {
+    origin: process.env.CLIENT_URL,
+    methods: ["GET", "POST"],
+  },
+});
 
-io.on('connection', (socket) => {
-  socket.emit('test', { some: 'data' });
-})
-
-server.listen(3000, () => {
-  console.log("listening on *:3000");
+io.on("connection", (socket) => {
+  console.log("new connection");
+  socket.on("join", (msg: Messages["join"]["client"], cb) => {
+    console.log(msg.code);
+    const res: Messages["join"]["server"] = { success: true };
+    cb(res);
+  });
 });
