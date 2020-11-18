@@ -25,6 +25,7 @@ io.on("connection", (socket: Socket) => {
 
   function initializeServerToClient() {
     game.onTransition((view) => {
+      // TODO: Might want to check view.changed
       console.log(view);
       if (view) socket.emit("update", { state: view });
     }, name);

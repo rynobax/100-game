@@ -59,6 +59,7 @@ type GameContext = {
   activePlayer: number;
   cardsPlayed: number;
   drawPile: number[];
+  errors: Record<string, string>;
   players: Player[];
   piles: Record<Pile, number[]>;
 };
@@ -130,6 +131,15 @@ const createGameMachine = (id: string): GameMachine => {
       { drawnInitialHand: false, hand: [], name: e.name },
     ],
   });
+
+  const errorMessage = (msg: string) =>
+    assign<GameContext, GameEvent>({
+      activePlayer: (c) => (c.activePlayer + 1) % c.players.length,
+    });
+
+  const blah = () => {
+    console.log("sup");
+  };
 
   const rootStates: StatesConfig<GameContext, GameSchema, GameEvent> = {
     player_joined: {
@@ -230,12 +240,14 @@ const createGameMachine = (id: string): GameMachine => {
       activePlayer: 0,
       cardsPlayed: 0,
       drawPile: new Array(99).fill(0).map((_, i) => i + 1),
+      errors: {},
       piles: { A: [], B: [], C: [], D: [] },
       players: [],
     },
     id,
     initial: "lobby_not_ready",
     states: rootStates,
+    exit: blah,
   };
 
   return Machine(config);
