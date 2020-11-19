@@ -7,13 +7,20 @@ type HomeProps = PageProps;
 const Home: React.FC<HomeProps> = ({ setPage, setRoleInfo }) => {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   function submitJoin() {
     setLoading(true);
-    joinGame(code, name).then(() => {
-      setRoleInfo({ role: "guest", code });
-      setPage("lobby");
+    joinGame(code, name).then(({ error, success }) => {
+      console.log({ error, success })
+      if (success) {
+        setRoleInfo({ role: "guest", code });
+        setPage("lobby");
+      } else {
+        setError(error);
+        setLoading(false);
+      }
     });
   }
 
@@ -57,6 +64,7 @@ const Home: React.FC<HomeProps> = ({ setPage, setRoleInfo }) => {
       <button onClick={submitHost} disabled={loading || !nameIsValid}>
         Host a Game
       </button>
+      {error && <div>Error: {error}</div>}
     </div>
   );
 };

@@ -11,11 +11,14 @@ if (VERBOSE) socket.onAny(console.log);
 // TODO: Have sensible timeout and reject
 // TODO: Reject if server is not running
 
-export function joinGame(code: string, name: string) {
+export function joinGame(
+  code: string,
+  name: string
+): Promise<Messages["join"]["server"]> {
   return new Promise((resolve) => {
     const msg: Messages["join"]["client"] = { code, name };
     socket.emit("join", msg, (res: Messages["join"]["server"]) => {
-      resolve(res.success);
+      resolve(res);
     });
   });
 }

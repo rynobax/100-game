@@ -29,6 +29,12 @@ function App() {
     // TODO: Probably need to change this if they leave the game or something
   }, []);
 
+  useEffect(() => {
+    if (gameState?.started && page !== "game") {
+      setPage("game");
+    }
+  }, [gameState?.started, page]);
+
   const pageProps: PageProps = {
     setPage,
     roleInfo,

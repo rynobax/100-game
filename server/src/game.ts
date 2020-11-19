@@ -8,12 +8,13 @@ import {
   State,
 } from "xstate";
 import type { GameStateUpdate, PlayerAction } from "../../shared/types";
+import { generateID, shuffle } from "./util";
 
 const MAX_HAND_SIZE = 6;
 const MIN_ALLOWED_PLAYERS = 2;
-const MAX_ALLOWED_PLAYERS = 10;
+const MAX_ALLOWED_PLAYERS = 3;
 
-type BaseEvent<K, T = {}> = T & { type: K; name: string };
+type BaseEvent<K, T = {}> = T & { type: K; name: string; id: string };
 
 type Pile = "A" | "B" | "C" | "D";
 
@@ -46,6 +47,7 @@ interface GameSchema {
     card_played: {};
     play_required: {};
     play_optional: {};
+    start_game: {};
   };
 }
 
@@ -62,26 +64,18 @@ type GameContext = {
   errors: Record<string, string>;
   players: Player[];
   piles: Record<Pile, number[]>;
+  started: boolean;
 };
 type GameMachine = StateMachine<GameContext, GameSchema, GameEvent>;
 
 export type Game = {
   getCurrentView: (name: string) => GameStateUpdate;
+  getError: (id: string) => string;
   onTransition: (fn: (view: GameStateUpdate) => void, name: string) => void;
   transition: (event: GameEvent) => void;
 };
 
 const games = new Map<RoomCode, Game>();
-
-function generateID(length: number) {
-  let result = "";
-  const characters = "ABCDEFGHJKMNPQRSTUVWXYZ";
-  const charactersLength = characters.length;
-  for (var i = 0; i < length; i++) {
-    result += characters.charAt(Math.floor(Math.random() * charactersLength));
-  }
-  return result;
-}
 
 function createRoomCode() {
   let code = generateID(4);
@@ -125,21 +119,30 @@ const createGameMachine = (id: string): GameMachine => {
     activePlayer: (c) => (c.activePlayer + 1) % c.players.length,
   });
 
-  const addPlayer = assign<GameContext, EventPlayerJoin>({
-    players: (c, e) => [
-      ...c.players,
-      { drawnInitialHand: false, hand: [], name: e.name },
-    ],
+  const addPlayer = assign<GameContext, EventPlayerJoin>((c, e) => {
+    if (c.players.find((p) => p.name === e.name)) {
+      return {};
+    }
+    return {
+      players: [
+        ...c.players,
+        { drawnInitialHand: false, hand: [], name: e.name },
+      ],
+    };
+  });
+
+  const shuffleDeck = assign<GameContext>({
+    drawPile: (c) => shuffle(c.drawPile),
   });
 
   const errorMessage = (msg: string) =>
     assign<GameContext, GameEvent>({
-      activePlayer: (c) => (c.activePlayer + 1) % c.players.length,
+      errors: (c, e) => ({ ...c.errors, [e.id]: msg }),
     });
 
-  const blah = () => {
-    console.log("sup");
-  };
+  const startGame = assign<GameContext>({
+    started: () => true,
+  });
 
   const rootStates: StatesConfig<GameContext, GameSchema, GameEvent> = {
     player_joined: {
@@ -156,7 +159,6 @@ const createGameMachine = (id: string): GameMachine => {
           target: "lobby_not_ready",
         },
       ],
-
       entry: addPlayer,
     },
     lobby_not_ready: {
@@ -167,12 +169,16 @@ const createGameMachine = (id: string): GameMachine => {
     lobby_ready: {
       on: {
         PLAYER_JOIN: "player_joined",
-        START_GAME: "next_player",
+        START_GAME: "start_game",
       },
     },
     lobby_full: {
       on: {
-        START_GAME: "next_player",
+        START_GAME: "start_game",
+        PLAYER_JOIN: {
+          target: "lobby_full",
+          actions: errorMessage("Lobby is full"),
+        },
       },
     },
     finished_loss: {
@@ -183,6 +189,10 @@ const createGameMachine = (id: string): GameMachine => {
     },
 
     // During the game
+    start_game: {
+      entry: [shuffleDeck, startGame],
+      always: "next_player",
+    },
     next_player: {
       entry: [drawCards, incPlayer],
       always: [
@@ -238,11 +248,11 @@ const createGameMachine = (id: string): GameMachine => {
       errors: {},
       piles: { A: [], B: [], C: [], D: [] },
       players: [],
+      started: false,
     },
     id,
     initial: "lobby_not_ready",
     states: rootStates,
-    exit: blah,
   };
 
   return Machine(config);
@@ -256,6 +266,7 @@ export function createGame() {
   // TODO: stop machine sometime
 
   const newGame: Game = {
+    getError: (id) => service.state.context.errors[id] || "",
     getCurrentView: (name) => generateGameStateUpdate(service.state, name),
     onTransition: (fn, name) => {
       service.onTransition((state) => {
@@ -273,7 +284,7 @@ export function createGame() {
 
 export function getGame(code: string) {
   const game = games.get(code);
-  if (!game) throw Error(`Could not get game ${code}`);
+  if (!game) return null;
   return game;
 }
 
@@ -283,7 +294,7 @@ function generateGameStateUpdate(
   state: State<GameContext, GameEvent, GameSchema>,
   name: string
 ): GameStateUpdate | null {
-  const { activePlayer, piles, players } = state.context;
+  const { activePlayer, piles, players, started } = state.context;
   const currentState = state.value as keyof GameSchema["states"];
 
   const playerIndex = players.findIndex((p) => p.name === name);
@@ -306,5 +317,6 @@ function generateGameStateUpdate(
     hand: player.hand,
     piles,
     players: players.map((p) => p.name),
+    started,
   };
 }

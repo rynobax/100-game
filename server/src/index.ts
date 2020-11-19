@@ -17,11 +17,13 @@ io.listen(PORT, {
   },
 });
 
+// TODO: Do I need to close the on listeners if socket drops?
 io.on("connection", (socket: Socket) => {
   console.log("new connection");
   let gameCode: string;
   let game: Game;
   let name: string;
+  const id = socket.id;
 
   function initializeServerToClient() {
     game.onTransition((view) => {
@@ -39,25 +41,34 @@ io.on("connection", (socket: Socket) => {
     gameCode = code;
     name = msg.name;
     game = getGame(code);
-    game.transition({ type: "PLAYER_JOIN", name });
+    game.transition({ type: "PLAYER_JOIN", name, id });
     initializeServerToClient();
   });
 
   // TODO: joining will not always work, need to handle failure
   socket.on("join", (msg: Messages["join"]["client"], cb) => {
     console.log(msg.code);
-    const res: Messages["join"]["server"] = { success: true };
-    cb(res);
     gameCode = msg.code;
     name = msg.name;
     game = getGame(msg.code);
-    game.transition({ type: "PLAYER_JOIN", name });
-    initializeServerToClient();
+    if (!game) {
+      const res: Messages["join"]["server"] = {
+        success: false,
+        error: `Game ${msg.code} does not exist`,
+      };
+      cb(res);
+    } else {
+      game.transition({ type: "PLAYER_JOIN", name, id });
+      const error = game.getError(id);
+      const res: Messages["join"]["server"] = { success: !error, error };
+      cb(res);
+      if (!error) initializeServerToClient();
+    }
   });
 
   socket.on("start", (msg: Messages["start"]["client"], cb) => {
     const res: Messages["start"]["server"] = { success: true };
     cb(res);
-    game.transition({ type: "START_GAME", name });
+    game.transition({ type: "START_GAME", name, id });
   });
 });

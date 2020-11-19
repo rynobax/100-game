@@ -5,6 +5,7 @@ interface JoinClient {
 
 interface JoinServer {
   success: boolean;
+  error: string;
 }
 
 interface HostClient {
@@ -28,6 +29,7 @@ export type GameStateUpdate = {
   hand: number[];
   piles: Record<Pile, number[]>;
   players: string[];
+  started: boolean;
 };
 
 interface UpdateServer {
